@@ -1,0 +1,1183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>AdaptivePlan · An Autonomous Study Planner</title>
+  <meta name="description" content="AdaptivePlan: an LLM-powered autonomous study planning agent with dynamic rescheduling for engineering students.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%231C1B18'/%3E%3Ctext x='32' y='45' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23fff'%3Ea%3C/text%3E%3C/svg%3E">
+
+  <!-- Apply saved / system theme before first paint (no flash) -->
+  <script>
+    (function () {
+      try {
+        var s = localStorage.getItem('adaptive_dark');
+        var dark = s === null ? window.matchMedia('(prefers-color-scheme: dark)').matches : s === 'true';
+        if (dark) document.documentElement.classList.add('dark');
+      } catch (e) {}
+    })();
+  </script>
+
+  <link rel="stylesheet" href="/styles.css">
+
+  <script defer src="/vendor/alpine.min.js"></script>
+  <script src="/vendor/fullcalendar.min.js"></script>
+  <script src="/vendor/chart.min.js"></script>
+</head>
+<body x-data="adaptiveApp()" x-init="initApp()" @keydown.escape.window="closeTopLayer()">
+
+  <!-- ===== Icon sprite ===== -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <symbol id="i-dashboard" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.8"/><rect x="14" y="3" width="7" height="5" rx="1.8"/><rect x="14" y="12" width="7" height="9" rx="1.8"/><rect x="3" y="16" width="7" height="5" rx="1.8"/></symbol>
+      <symbol id="i-today" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></symbol>
+      <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></symbol>
+      <symbol id="i-agent" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2.5"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/><path d="M9 2.5v3M15 2.5v3M9 18.5v3M15 18.5v3M2.5 9h3M2.5 15h3M18.5 9h3M18.5 15h3"/></symbol>
+      <symbol id="i-quiz" viewBox="0 0 24 24"><path d="M2 9.5 12 5l10 4.5-10 4.5z"/><path d="M6 11.7V16c0 1.5 2.7 3 6 3s6-1.5 6-3v-4.3M22 9.5V15"/></symbol>
+      <symbol id="i-setup" viewBox="0 0 24 24"><path d="M4 6h9M19 6h1M4 12h3M13 12h7M4 18h10M20 18h0"/><circle cx="16" cy="6" r="2.2"/><circle cx="10" cy="12" r="2.2"/><circle cx="17" cy="18" r="2.2"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z"/></symbol>
+      <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2.5 12h2M19.5 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+      <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2.5 4.5 14H11l-1 7.5L19.5 10H13z"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3.5v11m0 0-4.5-4.5M12 14.5l4.5-4.5M4.5 20h15"/></symbol>
+      <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.5-4M4 4v4h4M4 13a8 8 0 0 0 14.5 4M20 20v-4h-4"/></symbol>
+      <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19.2 8.8a2.8 2.8 0 0 0-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+      <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3.5 2.5 20h19z"/><path d="M12 10v4.5M12 17.4v.1"/></symbol>
+      <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6v.1"/></symbol>
+      <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></symbol>
+      <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></symbol>
+      <symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></symbol>
+      <symbol id="i-chev-right" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+      <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+      <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+      <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M11 3l1.9 5.6L18.5 10.5l-5.6 1.9L11 18l-1.9-5.6L3.5 10.5l5.6-1.9z"/><path d="M19 16v4M17 18h4"/></symbol>
+      <symbol id="i-thought" viewBox="0 0 24 24"><path d="M4 5.5h16v11H9.5L4 20.5z"/></symbol>
+      <symbol id="i-terminal" viewBox="0 0 24 24"><path d="m5 8 4 4-4 4M12 17h7"/></symbol>
+      <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4M5 4h12l-2 4 2 4H5"/></symbol>
+      <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15.5v-11m0 0L7.5 9M12 4.5 16.5 9M4.5 20h15"/></symbol>
+      <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5V5.5M8.5 7.5H15"/></symbol>
+      <symbol id="i-alarm" viewBox="0 0 24 24"><circle cx="12" cy="13" r="7.5"/><path d="M12 9v4l2.5 1.5M5 4 2.5 6.5M19 4l2.5 2.5"/></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><path d="M7.5 4.5v15l12-7.5z"/></symbol>
+      <symbol id="i-rotate" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5M4 4v4.5h4.5"/></symbol>
+      <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8"/></symbol>
+    </defs>
+  </svg>
+
+  <div class="shell">
+
+    <!-- ===================== SIDEBAR (desktop) ===================== -->
+    <aside class="sidebar" aria-label="Primary">
+      <div class="brand" @click="switchTab('dashboard')" role="button" tabindex="0" @keydown.enter="switchTab('dashboard')">
+        <div class="brand-mark">a</div>
+        <div>
+          <div class="brand-name">AdaptivePlan</div>
+          <div class="brand-sub">Autonomous study agent</div>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <template x-for="item in navItems" :key="item.id">
+          <button class="nav-item" :class="activeTab === item.id && 'active'" @click="switchTab(item.id)" :aria-current="activeTab === item.id ? 'page' : null">
+            <svg class="icon"><use :href="'#i-' + item.icon"/></svg>
+            <span x-text="item.label"></span>
+            <span x-show="item.id === 'agent' && agentWorking" class="live-dot" title="Agent is running"></span>
+          </button>
+        </template>
+      </nav>
+
+      <div class="sidebar-foot">
+        <!-- AI engine control -->
+        <div class="engine">
+          <div class="engine-head">
+            <span class="eyebrow">AI engine</span>
+            <button class="btn btn-ghost btn-sm" @click="testConnection()" :disabled="testingConnection" title="Test Gemini API connection">
+              <span x-show="!testingConnection" class="row" style="gap:5px"><svg class="icon icon-sm"><use href="#i-bolt"/></svg>Test</span>
+              <span x-show="testingConnection" class="spinner"></span>
+            </button>
+          </div>
+          <div class="seg" role="group" aria-label="LLM mode">
+            <button class="mock" :class="status.llm_mode === 'mock' && 'on'" @click="switchLlmMode('mock')">Mock</button>
+            <button class="live" :class="status.llm_mode === 'live' && 'on'" @click="switchLlmMode('live')"
+                    :title="!status.live_available ? 'Add GEMINI_API_KEY to .env to enable' : 'Use Gemini'">
+              Live
+              <svg x-show="!status.live_available" class="icon icon-sm"><use href="#i-lock"/></svg>
+            </button>
+          </div>
+          <div class="engine-model">
+            <span class="status-dot" :class="status.llm_mode === 'live' && 'live'"></span>
+            <span x-text="status.model"></span>
+          </div>
+          <div class="test-result" x-show="connectionTestResult" x-cloak :class="connectionTestResult?.success ? 'ok' : 'bad'">
+            <svg class="icon icon-sm"><use :href="connectionTestResult?.success ? '#i-check' : '#i-alert'"/></svg>
+            <span x-text="connectionTestResult?.success ? ('Connected · ' + connectionTestResult.latency_ms + ' ms') : (connectionTestResult?.message || 'Check GEMINI_API_KEY')"></span>
+          </div>
+        </div>
+
+        <button class="nav-item" @click="toggleDarkMode()">
+          <svg class="icon"><use :href="darkMode ? '#i-sun' : '#i-moon'"/></svg>
+          <span x-text="darkMode ? 'Light mode' : 'Dark mode'"></span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- ===================== MAIN COLUMN ===================== -->
+    <div class="main">
+
+      <header class="topbar">
+        <div class="brand topbar-brand" @click="switchTab('dashboard')">
+          <div class="brand-mark">a</div>
+          <div class="brand-name">AdaptivePlan</div>
+        </div>
+
+        <div class="page-head">
+          <div class="eyebrow" x-text="todayLabel"></div>
+          <h1 class="page-title" x-text="pageTitle"></h1>
+        </div>
+
+        <div class="topbar-actions">
+          <span x-show="status.is_demo" x-cloak class="chip chip-demo hide-mobile">Demo data</span>
+          <button class="btn-icon show-mobile" @click="toggleDarkMode()" aria-label="Toggle theme">
+            <svg class="icon"><use :href="darkMode ? '#i-sun' : '#i-moon'"/></svg>
+          </button>
+          <button class="btn btn-secondary" aria-label="New plan" @click="promptNewPlan()">
+            <svg class="icon icon-sm"><use href="#i-plus"/></svg><span class="label-txt">New plan</span>
+          </button>
+          <button class="btn btn-primary" aria-label="Generate plan" @click="triggerGeneratePlan()" :disabled="agentWorking || !hasData"
+                  :title="!hasData ? 'Create a plan first' : 'Run the autonomous planner'">
+            <span x-show="agentWorking" class="spinner"></span>
+            <svg x-show="!agentWorking" class="icon icon-sm"><use href="#i-sparkle"/></svg>
+            <span class="label-txt" x-text="agentWorking ? 'Planning…' : 'Generate plan'"></span>
+          </button>
+        </div>
+      </header>
+
+      <main class="content">
+
+        <!-- Replan audit banner (global) -->
+        <div class="banner" x-show="replanDelta" x-cloak>
+          <svg class="icon"><use href="#i-rotate"/></svg>
+          <div class="grow">
+            <strong>Plan updated — what changed and why</strong>
+            <ul>
+              <template x-for="c in replanDelta?.changes || []"><li x-text="c"></li></template>
+            </ul>
+          </div>
+          <button class="btn-icon btn-icon-sm" @click="replanDelta = null" aria-label="Dismiss"><svg class="icon icon-sm"><use href="#i-x"/></svg></button>
+        </div>
+
+        <!-- Unscheduled topics capacity warning -->
+        <div class="callout callout-warn" x-show="unscheduledConflict" x-cloak style="margin-bottom:18px">
+          <svg class="icon"><use href="#i-alert"/></svg>
+          <div class="grow">
+            <strong>Capacity Warning</strong>
+            <p x-text="unscheduledConflict?.message || 'Some topics could not fit before the exam. Increase daily hours or use Panic Mode.'"></p>
+          </div>
+          <div class="row" style="gap:8px">
+            <button class="btn btn-secondary btn-sm" @click="switchTab('setup')">Increase daily hours</button>
+            <button class="btn btn-primary btn-sm" @click="promptPanicFromWarning()">Panic Mode</button>
+          </div>
+        </div>
+
+        <!-- ===================== DASHBOARD ===================== -->
+        <section x-show="activeTab === 'dashboard'" x-cloak>
+
+          <div class="empty" x-show="!hasData">
+            <div class="empty-icon"><svg class="icon"><use href="#i-book"/></svg></div>
+            <h3>No study plan yet</h3>
+            <p>AdaptivePlan builds a day-wise timetable with an autonomous agent and replans whenever life gets in the way. Start fresh, or explore with sample data.</p>
+            <div class="empty-actions">
+              <button class="btn btn-primary" @click="promptNewPlan()"><svg class="icon icon-sm"><use href="#i-plus"/></svg>Create new plan</button>
+              <button class="btn btn-secondary" @click="reloadDemoSeed()"><svg class="icon icon-sm"><use href="#i-download"/></svg>Load demo student</button>
+            </div>
+          </div>
+
+          <div class="stack-lg" x-show="hasData">
+
+            <div class="grid grid-4">
+              <div class="stat">
+                <div class="stat-label">Study sessions</div>
+                <div class="stat-value tnum" x-text="dashboard.summary?.total_tasks || 0">0</div>
+                <div class="bar" style="margin-top:12px"><span :style="{ width: (dashboard.summary?.completion_percentage || 0) + '%' }"></span></div>
+                <div class="stat-foot" x-text="(dashboard.summary?.completion_percentage || 0) + '% completed'"></div>
+              </div>
+              <div class="stat">
+                <div class="stat-label">Completed</div>
+                <div class="stat-value tnum" style="color:var(--ok)" x-text="dashboard.summary?.done_tasks || 0">0</div>
+                <div class="stat-foot">Spaced revision is scheduled automatically</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label">Missed</div>
+                <div class="stat-value tnum" :style="(dashboard.summary?.missed_tasks || 0) > 0 ? 'color:var(--bad)' : ''" x-text="dashboard.summary?.missed_tasks || 0">0</div>
+                <div class="stat-foot">Auto-replanning keeps you on track</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label">Subjects</div>
+                <div class="stat-value tnum" x-text="dashboard.readiness?.length || 0">0</div>
+                <div class="stat-foot">Upcoming exams in the plan</div>
+              </div>
+            </div>
+
+            <div class="grid split-2-1">
+
+              <div class="stack-lg">
+                <div class="card">
+                  <div class="card-head">
+                    <div>
+                      <div class="card-title">Exam readiness</div>
+                      <div class="card-sub">Syllabus 40% · quiz mastery 30% · revisions 20% · time buffer 10%</div>
+                    </div>
+                  </div>
+                  <div>
+                    <template x-for="r in dashboard.readiness" :key="r.subject_id">
+                      <div class="ready-row">
+                        <div class="row-between">
+                          <div class="row" style="min-width:0">
+                            <span class="dot" :style="{ backgroundColor: r.color }"></span>
+                            <span class="ready-name" x-text="r.subject_name"></span>
+                            <span class="chip" :class="daysClass(r.days_left)" x-text="r.days_left + (r.days_left === 1 ? ' day left' : ' days left')"></span>
+                          </div>
+                          <div class="ready-score tnum" :class="scoreClass(r.readiness_score)"><span x-text="r.readiness_score"></span><small>/100</small></div>
+                        </div>
+                        <div class="bar"><span :style="{ width: r.readiness_score + '%', backgroundColor: r.color }"></span></div>
+                        <div class="ready-meta">
+                          <span>Exam <strong x-text="r.exam_date"></strong></span>
+                          <span>Topics <strong x-text="r.completed_count + '/' + r.topics_count"></strong></span>
+                          <span>Mastery <strong x-text="r.avg_mastery + '%'"></strong></span>
+                          <span>Revisions <strong x-text="r.revisions_done"></strong></span>
+                        </div>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+
+                <div class="grid grid-2">
+                  <div class="card">
+                    <div class="card-title" style="margin-bottom:14px">Session mix</div>
+                    <div class="chart-box"><canvas id="taskTypeChart"></canvas></div>
+                  </div>
+                  <div class="card">
+                    <div class="card-title" style="margin-bottom:14px">Daily study hours</div>
+                    <div class="chart-box"><canvas id="dailyHoursChart"></canvas></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="stack-lg">
+
+                <!-- Next up today -->
+                <div class="card">
+                  <div class="card-head" style="margin-bottom:8px">
+                    <div class="card-title">Up next today</div>
+                    <button class="btn btn-ghost btn-sm" @click="switchTab('today')">All<svg class="icon icon-sm"><use href="#i-chev-right"/></svg></button>
+                  </div>
+                  <div x-show="nextTasks.length === 0" class="muted" style="padding:10px 0 2px">
+                    <span x-text="todayTasks.length ? 'All sessions for today are handled. Nice work.' : 'Nothing scheduled today. Rest, or revise something light.'"></span>
+                  </div>
+                  <template x-for="t in nextTasks" :key="t.id">
+                    <div class="next-item">
+                      <span class="next-time" x-text="t.start_time"></span>
+                      <span class="next-bar" :style="{ backgroundColor: t.color }"></span>
+                      <div class="grow">
+                        <div style="font-weight:600;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" x-text="t.topic_name"></div>
+                        <div class="muted" style="font-size:12px" x-text="t.subject_name + ' · ' + t.duration_hours + 'h'"></div>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+
+                <!-- Coach -->
+                <div class="card">
+                  <div class="card-head" style="margin-bottom:16px">
+                    <div class="card-title">Coach review</div>
+                    <button class="btn btn-ghost btn-sm" @click="fetchCoachFeedback()"><svg class="icon icon-sm"><use href="#i-refresh"/></svg>Refresh</button>
+                  </div>
+                  <div class="stack">
+                    <div class="coach-score">
+                      <div class="ring">
+                        <svg viewBox="0 0 64 64"><circle class="track" cx="32" cy="32" r="26"/><circle class="value" cx="32" cy="32" r="26" :stroke-dasharray="ringDash(coachReview.score)"/></svg>
+                        <div class="ring-num tnum" x-text="coachReview.score ? coachReview.score : '–'"></div>
+                      </div>
+                      <div>
+                        <div style="font-weight:600">Plan quality</div>
+                        <div class="muted" style="font-size:12.5px" x-text="coachReview.score >= 80 ? 'Balanced load with healthy revision spacing.' : 'Pacing could use some balancing.'"></div>
+                      </div>
+                    </div>
+
+                    <div class="callout callout-bad" x-show="coachReview.burnout_warning">
+                      <svg class="icon icon-sm"><use href="#i-alert"/></svg>
+                      <div><strong>Burnout guard</strong><p x-text="coachReview.burnout_warning"></p></div>
+                    </div>
+
+                    <div x-show="(coachReview.suggestions || []).length">
+                      <div class="eyebrow" style="margin-bottom:9px">Suggestions</div>
+                      <ul class="bullets"><template x-for="s in coachReview.suggestions || []"><li x-text="s"></li></template></ul>
+                    </div>
+
+                    <p class="quote" x-text="coachReview.encouragement || 'Keep following the plan consistently.'"></p>
+                  </div>
+                </div>
+
+                <!-- Quick actions -->
+                <div class="card" style="padding:10px 16px">
+                  <div class="action-list">
+                    <a class="action-item" href="/api/export/ics" download><svg class="icon"><use href="#i-calendar"/></svg>Export to calendar (.ics)<svg class="icon icon-sm chev"><use href="#i-chev-right"/></svg></a>
+                    <a class="action-item" href="/api/export/pdf" download><svg class="icon"><use href="#i-file"/></svg>Download PDF timetable<svg class="icon icon-sm chev"><use href="#i-chev-right"/></svg></a>
+                    <button class="action-item" @click="downloadBackup()"><svg class="icon"><use href="#i-database"/></svg>Backup data (.json)<svg class="icon icon-sm chev"><use href="#i-chev-right"/></svg></button>
+                    <button class="action-item" @click="triggerManualReplan()"><svg class="icon"><use href="#i-refresh"/></svg>Replan from today<svg class="icon icon-sm chev"><use href="#i-chev-right"/></svg></button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===================== TODAY ===================== -->
+        <section x-show="activeTab === 'today'" x-cloak>
+
+          <div class="empty" x-show="!hasData">
+            <div class="empty-icon"><svg class="icon"><use href="#i-today"/></svg></div>
+            <h3>No active tasks</h3>
+            <p>Create a study plan to see today's agenda, spaced-revision items and your daily check-in.</p>
+            <div class="empty-actions"><button class="btn btn-primary" @click="promptNewPlan()"><svg class="icon icon-sm"><use href="#i-plus"/></svg>Create new plan</button></div>
+          </div>
+
+          <div class="stack-lg" x-show="hasData">
+            <div class="hero">
+              <div style="position:relative">
+                <div class="eyebrow">Daily check-in</div>
+                <h2 x-text="checkin.message || 'Ready for today’s study sessions?'"></h2>
+                <div class="hero-meta" x-text="(checkin.date || todayStr) + ' · ' + (checkin.task_count || 0) + ' session(s) on your agenda'"></div>
+              </div>
+              <div class="hero-count tnum">
+                <span x-text="todayDone + '/' + todayTasks.length"></span>
+                <small>done today</small>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-head">
+                <div>
+                  <div class="card-title">Today’s checklist</div>
+                  <div class="card-sub">Mark progress as you go — missed sessions are rescheduled automatically.</div>
+                </div>
+              </div>
+
+              <div class="empty empty-sm" x-show="todayTasks.length === 0">
+                <div class="empty-icon"><svg class="icon"><use href="#i-sparkle"/></svg></div>
+                <p>No sessions scheduled for today. Enjoy the rest, or take a quick topic quiz.</p>
+              </div>
+
+              <div class="stack" style="gap:10px">
+                <template x-for="t in todayTasks" :key="t.id">
+                  <div class="task"
+                       :class="{ 'is-done': t.status === 'done', 'is-missed': t.status === 'missed', 'is-review': t.status === 'needs_revision' }"
+                       :style="{ '--task-color': t.color }">
+                    <div class="task-time tnum">
+                      <span x-text="t.start_time"></span>
+                      <small x-text="'→ ' + t.end_time + ' · ' + t.duration_hours + 'h'"></small>
+                    </div>
+                    <div class="task-main">
+                      <div class="task-subject" x-text="t.subject_name"></div>
+                      <div class="task-title" x-text="t.unit + ' · ' + t.topic_name"></div>
+                      <div class="task-tags">
+                        <span class="chip" :class="t.type === 'revision' ? 'chip-accent' : 'chip-info'" x-text="t.type"></span>
+                        <span class="chip" x-text="'Difficulty ' + t.difficulty + '/5'"></span>
+                      </div>
+                    </div>
+                    <div class="task-actions">
+                      <button class="btn-icon" @click="openExplainModal(t.id)" title="Why is this scheduled here?" aria-label="Explain"><svg class="icon"><use href="#i-bulb"/></svg></button>
+                      <button class="btn-icon" @click="startTopicQuiz(t.topic_id)" title="Take a topic quiz" aria-label="Quiz"><svg class="icon"><use href="#i-quiz"/></svg></button>
+                      <button class="status-btn s-done" :class="t.status === 'done' && 'on'" @click="setTaskStatus(t.id, 'done')"><svg class="icon icon-sm"><use href="#i-check"/></svg>Done</button>
+                      <button class="status-btn s-missed" :class="t.status === 'missed' && 'on'" @click="setTaskStatus(t.id, 'missed')"><svg class="icon icon-sm"><use href="#i-x"/></svg>Missed</button>
+                      <button class="status-btn s-review" :class="t.status === 'needs_revision' && 'on'" @click="setTaskStatus(t.id, 'needs_revision')"><svg class="icon icon-sm"><use href="#i-rotate"/></svg>Review</button>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===================== PLAN & CALENDAR ===================== -->
+        <section x-show="activeTab === 'plan'" x-cloak>
+
+          <div class="empty" x-show="!hasData">
+            <div class="empty-icon"><svg class="icon"><use href="#i-calendar"/></svg></div>
+            <h3>Your calendar is empty</h3>
+            <p>Add subjects and run the planner agent to generate a day-wise schedule.</p>
+            <div class="empty-actions"><button class="btn btn-primary" @click="promptNewPlan()"><svg class="icon icon-sm"><use href="#i-plus"/></svg>Create new plan</button></div>
+          </div>
+
+          <div class="grid split-3-1" x-show="hasData">
+            <div class="card" style="padding:18px 20px">
+              <div id="calendar" style="min-height:640px"></div>
+            </div>
+
+            <div class="card sticky-card">
+              <div class="card-title" style="margin-bottom:14px">Session details</div>
+
+              <div x-show="!selectedTask" class="muted" style="text-align:center;padding:30px 8px;font-size:13px">
+                <div class="empty-icon" style="margin:0 auto 12px;background:var(--surface-2);color:var(--muted)"><svg class="icon"><use href="#i-calendar"/></svg></div>
+                Select a session on the calendar to inspect it, update progress, or see why the agent placed it there.
+              </div>
+
+              <div x-show="selectedTask" class="stack">
+                <div>
+                  <div class="task-subject row" style="gap:7px"><span class="dot" :style="{ backgroundColor: selectedTask?.color }"></span><span x-text="selectedTask?.subject_name"></span></div>
+                  <div style="font-size:17px;font-weight:600;margin-top:4px;letter-spacing:-.01em" x-text="selectedTask?.unit + ' · ' + selectedTask?.topic_name"></div>
+                </div>
+
+                <dl class="detail-grid inset" style="margin:0">
+                  <dt>Date</dt><dd x-text="selectedTask?.date"></dd>
+                  <dt>Time</dt><dd x-text="selectedTask?.start_time + ' – ' + selectedTask?.end_time"></dd>
+                  <dt>Duration</dt><dd x-text="selectedTask?.duration_hours + ' h'"></dd>
+                  <dt>Type</dt><dd style="text-transform:capitalize" x-text="selectedTask?.type"></dd>
+                  <dt>Status</dt>
+                  <dd><span class="chip" :class="{ 'chip-ok': selectedTask?.status === 'done', 'chip-bad': selectedTask?.status === 'missed', 'chip-warn': selectedTask?.status === 'needs_revision' }" x-text="(selectedTask?.status || '').replace('_', ' ')"></span></dd>
+                  <dt>Exam</dt><dd x-text="selectedTask?.exam_date"></dd>
+                </dl>
+
+                <div>
+                  <div class="eyebrow" style="margin-bottom:6px">Scheduling reason</div>
+                  <p class="muted" style="font-size:13px" x-text="selectedTask?.reason || 'Calculated by the planner’s priority allocation.'"></p>
+                </div>
+
+                <div>
+                  <div class="eyebrow" style="margin-bottom:8px">Update status</div>
+                  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">
+                    <button class="status-btn s-done" style="justify-content:center;padding:0 6px" :class="selectedTask?.status === 'done' && 'on'" @click="setTaskStatus(selectedTask.id, 'done')">Done</button>
+                    <button class="status-btn s-missed" style="justify-content:center;padding:0 6px" :class="selectedTask?.status === 'missed' && 'on'" @click="setTaskStatus(selectedTask.id, 'missed')">Missed</button>
+                    <button class="status-btn s-review" style="justify-content:center;padding:0 6px" :class="selectedTask?.status === 'needs_revision' && 'on'" @click="setTaskStatus(selectedTask.id, 'needs_revision')">Review</button>
+                  </div>
+                </div>
+
+                <div class="stack" style="gap:8px">
+                  <button class="btn btn-secondary btn-block" @click="openExplainModal(selectedTask.id)"><svg class="icon icon-sm"><use href="#i-bulb"/></svg>Explain this slot</button>
+                  <button class="btn btn-secondary btn-block" @click="startTopicQuiz(selectedTask.topic_id)"><svg class="icon icon-sm"><use href="#i-quiz"/></svg>Take topic quiz</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===================== AGENT ACTIVITY ===================== -->
+        <section x-show="activeTab === 'agent'" x-cloak class="stack-lg" style="max-width:880px;margin:0 auto">
+
+          <div class="callout callout-warn" x-show="lastRunFallback" x-cloak>
+            <svg class="icon icon-sm"><use href="#i-alert"/></svg>
+            <div class="grow">
+              <strong>Gemini unavailable — this run used Mock</strong>
+              <p><span x-text="fallbackReason || 'Network or quota failure'"></span>. Your global engine setting is unchanged.</p>
+            </div>
+            <button class="btn-icon btn-icon-sm" @click="lastRunFallback = false" aria-label="Dismiss"><svg class="icon icon-sm"><use href="#i-x"/></svg></button>
+          </div>
+
+          <div class="card">
+            <div class="agent-head">
+              <div class="row" style="gap:14px">
+                <div class="empty-icon" style="margin:0;width:44px;height:44px;border-radius:13px"><svg class="icon"><use href="#i-agent"/></svg></div>
+                <div>
+                  <div class="card-title row" style="gap:9px">Planner agent <span x-show="agentWorking" class="live-dot"></span></div>
+                  <div class="card-sub">
+                    <span x-text="lastRunProvider || status.model"></span>
+                    <span x-show="lastRunFallback" class="chip chip-warn" style="margin-left:6px">fallback</span>
+                    <span class="mono" style="margin-left:8px" x-text="activeRunId ? 'run ' + activeRunId.slice(0, 8) : 'no run yet'"></span>
+                  </div>
+                </div>
+              </div>
+              <div class="row" style="gap:10px">
+                <div x-show="agentRuns && agentRuns.length > 0" class="row" style="gap:6px">
+                  <select class="input" style="height:38px;padding:0 10px;font-size:12.5px;min-width:210px"
+                          :value="activeRunId"
+                          @change="loadAgentRun($event.target.value)">
+                    <template x-for="(run, rIdx) in agentRuns" :key="run.id">
+                      <option :value="run.id" x-text="(rIdx === 0 ? '★ Latest: ' : 'History: ') + run.id.slice(0, 8) + ' (' + (run.provider?.includes('Gemini') ? 'Gemini' : 'Mock') + ' · ' + (run.iterations || 0) + ' steps)'"></option>
+                    </template>
+                  </select>
+                </div>
+                <button class="btn btn-primary" @click="triggerGeneratePlan()" :disabled="agentWorking || !hasData">
+                  <span x-show="agentWorking" class="spinner"></span>
+                  <svg x-show="!agentWorking" class="icon icon-sm"><use href="#i-play"/></svg>
+                  <span x-text="agentWorking ? 'Running…' : 'Run agent'"></span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="empty" x-show="visibleAgentEvents.length === 0" style="margin-top:8px">
+            <div class="empty-icon"><svg class="icon"><use href="#i-terminal"/></svg></div>
+            <h3>Watch the agent think</h3>
+            <p>Press <strong>Run agent</strong> or <strong>Generate plan</strong> and every thought, tool call and result will stream in here, live.</p>
+          </div>
+
+          <div class="timeline" x-show="visibleAgentEvents.length > 0">
+            <template x-for="(event, idx) in visibleAgentEvents" :key="idx">
+              <div class="t-event" :class="'t-' + agentKind(event.type)">
+                <div class="t-node"><svg class="icon"><use :href="'#i-' + agentIcon(event.type)"/></svg></div>
+                <div class="t-card">
+                  <div class="t-label">
+                    <span x-text="agentLabel(event.type)"></span>
+                    <template x-if="event.type === 'thought'"><span class="mono" style="letter-spacing:0;text-transform:none" x-text="'step ' + (event.data?.step || 1)"></span></template>
+                    <template x-if="event.type === 'thought' && event.data?.is_mock"><span class="chip chip-warn">mock</span></template>
+                    <template x-if="event.type === 'tool_call' || event.type === 'tool_result'"><strong x-text="event.data?.tool"></strong></template>
+                    <template x-if="event.type === 'summary'"><span class="mono" style="letter-spacing:0;text-transform:none" x-text="(event.data?.iterations || 0) + ' steps · ' + (event.data?.provider || 'LLM')"></span></template>
+                  </div>
+
+                  <template x-if="event.type === 'thought'"><div class="t-body" x-text="event.data?.thought"></div></template>
+                  <template x-if="event.type === 'summary'"><div class="t-body" style="color:var(--ink)" x-text="event.data?.summary"></div></template>
+                  <template x-if="event.type === 'error'"><div class="t-body" x-text="event.data?.message || event.data?.error || 'The run stopped with an error.'"></div></template>
+
+                  <template x-if="event.type === 'tool_call'">
+                    <details class="payload"><summary>Arguments</summary><pre class="code" x-text="JSON.stringify(event.data?.args, null, 2)"></pre></details>
+                  </template>
+                  <template x-if="event.type === 'tool_result'">
+                    <details class="payload"><summary>Output</summary><pre class="code" x-text="JSON.stringify(event.data?.result, null, 2)"></pre></details>
+                  </template>
+                </div>
+              </div>
+            </template>
+
+            <div class="t-event" x-show="agentWorking">
+              <div class="t-node"><span class="live-dot" style="width:7px;height:7px"></span></div>
+              <div class="muted row" style="padding:10px 4px;gap:10px"><span class="loader-dots"><i></i><i></i><i></i></span>Agent is working…</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===================== QUIZ ===================== -->
+        <section x-show="activeTab === 'quiz'" x-cloak>
+
+          <div class="empty" x-show="!hasData">
+            <div class="empty-icon"><svg class="icon"><use href="#i-quiz"/></svg></div>
+            <h3>No quiz topics yet</h3>
+            <p>Create a study plan with subjects and topics to generate interactive multiple-choice quizzes.</p>
+            <div class="empty-actions"><button class="btn btn-primary" @click="promptNewPlan()"><svg class="icon icon-sm"><use href="#i-plus"/></svg>Create new plan</button></div>
+          </div>
+
+          <div class="quiz-wrap stack-lg" x-show="hasData">
+
+            <div class="card" x-show="!activeQuiz">
+              <div class="card-head" style="margin-bottom:14px">
+                <div>
+                  <div class="card-title">Topic quiz</div>
+                  <div class="card-sub">Scores update topic mastery. Below 60% automatically adds a remedial revision session.</div>
+                </div>
+              </div>
+              <div class="row" style="flex-wrap:wrap">
+                <select x-model="selectedQuizTopicId" class="select grow" style="min-width:220px">
+                  <option value="">Choose a topic to test…</option>
+                  <template x-for="t in allTopics" :key="t.id">
+                    <option :value="t.id" x-text="t.subject_name + ' — ' + t.unit + ': ' + t.name"></option>
+                  </template>
+                </select>
+                <button class="btn btn-primary" @click="loadTopicQuiz(selectedQuizTopicId)" :disabled="!selectedQuizTopicId || quizLoading">
+                  <span x-show="quizLoading" class="loader-dots"><i></i><i></i><i></i></span>
+                  <span x-text="quizLoading ? 'Generating' : 'Start quiz'"></span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Questions -->
+            <div class="stack-lg" x-show="activeQuiz && !quizSubmitted">
+              <div class="row-between">
+                <div>
+                  <div class="eyebrow">Now testing</div>
+                  <div class="display" style="font-size:30px;line-height:1.1;margin-top:3px" x-text="activeQuiz?.topic_name"></div>
+                </div>
+                <span class="chip chip-info tnum" x-text="answeredCount + ' / ' + (activeQuiz?.questions?.length || 0) + ' answered'"></span>
+              </div>
+
+              <template x-for="(q, qIndex) in activeQuiz?.questions || []" :key="qIndex">
+                <div class="q-card">
+                  <div class="q-num" x-text="'QUESTION ' + (qIndex + 1)"></div>
+                  <div class="q-text" x-text="q.question"></div>
+                  <div>
+                    <template x-for="(opt, oIndex) in q.options" :key="oIndex">
+                      <label class="option">
+                        <input type="radio" :name="'question_' + qIndex" :value="opt" x-model="userAnswers[qIndex]">
+                        <span x-text="opt"></span>
+                      </label>
+                    </template>
+                  </div>
+                </div>
+              </template>
+
+              <div class="row" style="justify-content:flex-end">
+                <button class="btn btn-ghost" @click="activeQuiz = null">Cancel</button>
+                <button class="btn btn-primary" @click="submitCurrentQuiz()"><svg class="icon icon-sm"><use href="#i-check"/></svg>Submit &amp; grade</button>
+              </div>
+            </div>
+
+            <!-- Results -->
+            <div class="stack-lg" x-show="quizSubmitted">
+              <div class="result-hero" :class="quizResult?.score >= 60 ? 'good' : 'low'">
+                <div class="eyebrow" style="color:inherit;opacity:.8">Your score</div>
+                <div class="result-score tnum" x-text="quizResult?.score + '%'"></div>
+                <div style="font-weight:600;font-size:15px;margin-top:6px" x-text="quizResult?.feedback"></div>
+                <div style="font-size:13px;opacity:.85;margin-top:4px" x-text="'Topic mastery is now ' + (quizResult?.new_mastery ? Math.round(quizResult.new_mastery * 100) : '–') + '%'"></div>
+              </div>
+
+              <div class="callout callout-bad" x-show="quizResult?.weak_topic_loop">
+                <svg class="icon icon-sm"><use href="#i-alert"/></svg>
+                <div><strong>Weak topic detected</strong><p>An extra revision session was added to your schedule automatically.</p></div>
+              </div>
+
+              <template x-for="(qr, idx) in quizResult?.question_results || []" :key="idx">
+                <div class="result-card" :class="qr.is_correct ? 'ok' : 'bad'">
+                  <div class="row" style="gap:8px;margin-bottom:6px">
+                    <span class="chip" :class="qr.is_correct ? 'chip-ok' : 'chip-bad'" x-text="qr.is_correct ? 'Correct' : 'Incorrect'"></span>
+                    <span class="q-num" x-text="'Q' + (idx + 1)"></span>
+                  </div>
+                  <div style="font-weight:600;margin-bottom:8px" x-text="qr.question"></div>
+                  <div style="font-size:13px">Your answer: <span :class="qr.is_correct ? 'ans-ok' : 'ans-bad'" x-text="qr.user_answer || 'None'"></span></div>
+                  <div style="font-size:13px;margin-top:2px" x-show="!qr.is_correct">Correct answer: <span class="ans-ok" x-text="qr.correct_answer"></span></div>
+                  <p class="muted" style="font-size:13px;margin-top:8px" x-text="qr.explanation"></p>
+                </div>
+              </template>
+
+              <button class="btn btn-primary btn-block" @click="activeQuiz = null; quizSubmitted = false;">Test another topic</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===================== SETUP ===================== -->
+        <section x-show="activeTab === 'setup'" x-cloak>
+          <div class="grid split-2-1">
+
+            <div class="stack-lg">
+
+              <!-- AI engine (mobile only — desktop has it in the sidebar) -->
+              <div class="card only-mobile">
+                <div class="card-head" style="margin-bottom:12px">
+                  <div><div class="card-title">AI engine</div><div class="card-sub" x-text="status.model"></div></div>
+                  <button class="btn btn-secondary btn-sm" @click="testConnection()" :disabled="testingConnection">
+                    <span x-show="!testingConnection" class="row" style="gap:5px"><svg class="icon icon-sm"><use href="#i-bolt"/></svg>Test</span>
+                    <span x-show="testingConnection" class="spinner"></span>
+                  </button>
+                </div>
+                <div class="seg">
+                  <button class="mock" :class="status.llm_mode === 'mock' && 'on'" @click="switchLlmMode('mock')">Mock</button>
+                  <button class="live" :class="status.llm_mode === 'live' && 'on'" @click="switchLlmMode('live')">Live (Gemini)<svg x-show="!status.live_available" class="icon icon-sm"><use href="#i-lock"/></svg></button>
+                </div>
+                <div class="test-result" style="margin-top:10px" x-show="connectionTestResult" x-cloak :class="connectionTestResult?.success ? 'ok' : 'bad'">
+                  <span x-text="connectionTestResult?.success ? ('Connected · ' + connectionTestResult.latency_ms + ' ms') : (connectionTestResult?.message || 'Check GEMINI_API_KEY')"></span>
+                </div>
+              </div>
+
+              <!-- Subjects -->
+              <div class="card">
+                <div class="card-head">
+                  <div>
+                    <div class="card-title">Subjects &amp; syllabus</div>
+                    <div class="card-sub">Changing an exam date triggers an automatic replan.</div>
+                  </div>
+                  <div class="row" style="gap:6px;flex-wrap:wrap;justify-content:flex-end">
+                    <button class="btn btn-secondary btn-sm" @click="reloadDemoSeed()">Load demo</button>
+                    <button class="btn btn-primary btn-sm" @click="promptNewPlan()"><svg class="icon icon-sm"><use href="#i-plus"/></svg>New plan</button>
+                  </div>
+                </div>
+
+                <div class="empty empty-sm" x-show="!hasData">
+                  <p>No subjects yet. Start the wizard to build your first plan.</p>
+                </div>
+
+                <div class="stack" x-show="hasData">
+                  <template x-for="subj in setupData.subjects" :key="subj.id">
+                    <div class="subject-card">
+                      <div class="subject-head">
+                        <div class="row" style="min-width:0">
+                          <span class="dot" :style="{ backgroundColor: subj.color }"></span>
+                          <strong x-text="subj.name"></strong>
+                          <span class="chip" x-text="'Exam ' + subj.exam_date"></span>
+                        </div>
+                        <div class="subject-actions">
+                          <button class="btn-icon btn-icon-sm" @click="openEditSubject(subj)" title="Edit subject" aria-label="Edit subject"><svg class="icon icon-sm"><use href="#i-edit"/></svg></button>
+                          <button class="btn-icon btn-icon-sm" @click="openAddTopic(subj.id)" title="Add topic" aria-label="Add topic"><svg class="icon icon-sm"><use href="#i-plus"/></svg></button>
+                          <button class="btn-icon btn-icon-sm" @click="triggerPanicMode(subj.id, subj.name)" title="Panic mode — keep only high-yield topics" aria-label="Panic mode" style="color:var(--bad)"><svg class="icon icon-sm"><use href="#i-alarm"/></svg></button>
+                          <button class="btn-icon btn-icon-sm danger" @click="deleteSubject(subj.id)" title="Delete subject" aria-label="Delete subject"><svg class="icon icon-sm"><use href="#i-trash"/></svg></button>
+                        </div>
+                      </div>
+                      <div>
+                        <template x-for="t in subj.topics || []" :key="t.id">
+                          <div class="topic-row">
+                            <span class="unit" x-text="t.unit"></span>
+                            <span class="name" x-text="t.name"></span>
+                            <span class="meta tnum" x-text="'Diff ' + t.difficulty + ' · ' + t.est_hours + 'h'"></span>
+                            <span class="tools">
+                              <button class="btn-icon btn-icon-sm" @click="openEditTopic(t)" aria-label="Edit topic"><svg class="icon icon-sm"><use href="#i-edit"/></svg></button>
+                              <button class="btn-icon btn-icon-sm danger" @click="deleteTopic(t.id)" aria-label="Delete topic"><svg class="icon icon-sm"><use href="#i-x"/></svg></button>
+                            </span>
+                          </div>
+                        </template>
+                        <div class="muted" style="padding:12px 16px;font-size:13px" x-show="!(subj.topics || []).length">No topics yet.</div>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </div>
+
+              <!-- Add syllabus -->
+              <div class="card">
+                <div class="card-head" style="margin-bottom:14px">
+                  <div>
+                    <div class="card-title">Add syllabus</div>
+                    <div class="card-sub">Paste text or upload a PDF. Live mode uses Gemini; Mock uses rule-based parsing.</div>
+                  </div>
+                </div>
+                <div class="stack">
+                  <textarea x-model="syllabusText" class="textarea" placeholder="Paste syllabus text, e.g. Unit 1: RPC and RMI · Unit 2: Clock synchronisation…"></textarea>
+                  <div class="row-between" style="flex-wrap:wrap">
+                    <input type="file" id="pdfFileInput" accept=".pdf">
+                    <button class="btn btn-primary" @click="submitSyllabus()"><svg class="icon icon-sm"><use href="#i-upload"/></svg>Extract &amp; enroll topics</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Preferences -->
+            <div class="card sticky-card">
+              <div class="card-head" style="margin-bottom:16px">
+                <div>
+                  <div class="card-title">Study preferences</div>
+                  <div class="card-sub">Guardrails the planner never crosses.</div>
+                </div>
+              </div>
+              <div class="stack">
+                <div class="field">
+                  <label class="label" for="pf-hours">Max daily study hours</label>
+                  <input id="pf-hours" class="input" type="number" step="0.5" min="0.5" max="16" x-model.number="setupData.profile.max_daily_hours">
+                </div>
+                <div class="field">
+                  <label class="label" for="pf-time">Peak energy period</label>
+                  <select id="pf-time" class="select" x-model="setupData.profile.preferred_time">
+                    <option value="morning">Morning — early focus</option>
+                    <option value="afternoon">Afternoon</option>
+                    <option value="evening">Evening — standard</option>
+                    <option value="night">Night owl</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label class="label" for="pf-break">Break length (minutes after 90 min)</label>
+                  <input id="pf-break" class="input" type="number" min="5" max="60" x-model.number="setupData.profile.break_minutes">
+                </div>
+                <div class="field">
+                  <label class="label" for="pf-burn">Burnout threshold (consecutive heavy days)</label>
+                  <input id="pf-burn" class="input" type="number" min="2" max="14" x-model.number="setupData.profile.burnout_threshold_days">
+                </div>
+                <button class="btn btn-primary btn-block" @click="saveProfileSettings()">Save guardrails</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- ===================== MOBILE TAB BAR ===================== -->
+  <nav class="tabbar" aria-label="Primary">
+    <template x-for="item in navItems" :key="item.id">
+      <button :class="activeTab === item.id && 'active'" @click="switchTab(item.id)">
+        <svg class="icon"><use :href="'#i-' + item.icon"/></svg>
+        <span x-text="item.short"></span>
+        <span x-show="item.id === 'agent' && agentWorking" class="live-dot"></span>
+      </button>
+    </template>
+  </nav>
+
+  <!-- ===================== DIALOG (confirm / prompt) ===================== -->
+  <div class="backdrop" x-show="dialog" x-cloak style="z-index:70" @mousedown.self="closeDialog(false)">
+    <template x-if="dialog">
+      <div class="modal" role="dialog" aria-modal="true">
+        <div class="modal-head">
+          <div class="modal-title" x-text="dialog.title"></div>
+        </div>
+        <div class="modal-body">
+          <p class="muted" style="font-size:14px;white-space:pre-line" x-show="dialog.message" x-text="dialog.message"></p>
+          <template x-if="dialog.input">
+            <div class="field">
+              <label class="label" for="dialog-input" x-text="dialog.input.label"></label>
+              <input id="dialog-input" class="input" :type="dialog.input.type" :min="dialog.input.min" :max="dialog.input.max" x-model="dialog.input.value" @keydown.enter.prevent="closeDialog(true)">
+            </div>
+          </template>
+        </div>
+        <div class="modal-foot">
+          <button class="btn btn-ghost" @click="closeDialog(false)">Cancel</button>
+          <button class="btn" :class="dialog.danger ? 'btn-danger' : 'btn-primary'" @click="closeDialog(true)" x-text="dialog.confirmLabel"></button>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  <!-- ===================== MODAL: NEW PLAN CONFIRM ===================== -->
+  <div class="backdrop" x-show="newPlanConfirmOpen" x-cloak @mousedown.self="newPlanConfirmOpen = false">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-head"><div class="modal-title">Start a new study plan?</div></div>
+      <div class="modal-body">
+        <p class="muted" style="font-size:14px">This clears your current subjects, schedule, quiz results and agent history.</p>
+        <div class="callout callout-info">
+          <svg class="icon icon-sm"><use href="#i-info"/></svg>
+          <div>We recommend downloading a backup of your current plan first.</div>
+        </div>
+      </div>
+      <div class="modal-foot split">
+        <button class="btn btn-ghost" @click="newPlanConfirmOpen = false">Cancel</button>
+        <div class="row">
+          <button class="btn btn-secondary" @click="downloadBackup()"><svg class="icon icon-sm"><use href="#i-database"/></svg>Backup</button>
+          <button class="btn btn-danger" @click="confirmResetAndStartWizard()">Clear &amp; start fresh</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== MODAL: NEW PLAN WIZARD ===================== -->
+  <div class="backdrop" x-show="wizardOpen" x-cloak style="z-index:65">
+    <div class="modal modal-lg" role="dialog" aria-modal="true" aria-label="New plan wizard">
+      <div class="modal-head">
+        <div>
+          <div class="eyebrow" x-text="'Step ' + wizardStep + ' of 5'"></div>
+          <div class="modal-title" style="margin-top:4px" x-text="wizardTitle"></div>
+        </div>
+        <button class="btn-icon" @click="wizardOpen = false" aria-label="Close wizard"><svg class="icon"><use href="#i-x"/></svg></button>
+      </div>
+
+      <div class="steps">
+        <template x-for="(label, i) in wizardStepLabels" :key="label">
+          <div class="step" :class="{ on: wizardStep === i + 1, done: wizardStep > i + 1 }"><span x-text="label"></span></div>
+        </template>
+      </div>
+
+      <div class="modal-body" style="min-height:320px">
+
+        <!-- STEP 1 -->
+        <div x-show="wizardStep === 1" class="stack">
+          <!-- Fast Track Bulk Syllabus File / Text Upload -->
+          <div class="card" style="background:var(--surface-2);border:1px dashed var(--line-strong);padding:14px;border-radius:var(--r)">
+            <div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+              <div>
+                <div class="row" style="gap:7px;align-items:center">
+                  <span style="font-weight:600;font-size:13.5px">⚡ Fast Track: Upload or Paste Full Syllabus File</span>
+                  <span class="chip chip-accent" style="font-size:10.5px">Auto-detect</span>
+                </div>
+                <div class="muted" style="font-size:12px;margin-top:2px">Upload any .txt or .pdf file containing all your subjects, units and topics, or paste raw curriculum text.</div>
+              </div>
+              <div class="row" style="gap:6px;flex-wrap:wrap">
+                <label class="btn btn-secondary btn-sm" style="cursor:pointer">
+                  <svg class="icon icon-sm"><use href="#i-upload"/></svg>
+                  <span x-text="bulkUploading ? 'Reading file…' : 'Upload document (.txt / .pdf)'"></span>
+                  <input type="file" accept=".txt,.pdf,.md" @change="uploadBulkSyllabusFile($event)" style="display:none" :disabled="bulkUploading">
+                </label>
+                <button class="btn btn-ghost btn-sm" @click="bulkPasteOpen = !bulkPasteOpen" type="button">
+                  <svg class="icon icon-sm"><use href="#i-sparkle"/></svg>
+                  <span x-text="bulkPasteOpen ? 'Hide paste box' : 'Paste syllabus text'"></span>
+                </button>
+                <button class="btn btn-ghost btn-sm" @click="exportSyllabusJson()" type="button" title="Save backup as JSON" x-show="wizardSubjects.length">
+                  <svg class="icon icon-sm"><use href="#i-download"/></svg>
+                  <span>Backup JSON</span>
+                </button>
+                <label class="btn btn-ghost btn-sm" style="cursor:pointer" title="Restore from JSON backup">
+                  <svg class="icon icon-sm"><use href="#i-refresh"/></svg>
+                  <span>Load JSON</span>
+                  <input type="file" accept=".json" @change="importSyllabusJson($event)" style="display:none">
+                </label>
+              </div>
+            </div>
+
+            <!-- Paste Box Area -->
+            <div x-show="bulkPasteOpen" class="stack" style="margin-top:12px;gap:8px">
+              <textarea x-model="bulkPasteText" class="textarea" style="min-height:110px;font-size:12px;font-family:var(--font-mono)" placeholder="Paste your entire syllabus document here (with subjects, units, topics)..."></textarea>
+              <div class="row" style="justify-content:space-between;align-items:center">
+                <span class="muted" style="font-size:11.5px">Supports Mumbai Univ & all university syllabus formats</span>
+                <button class="btn btn-primary btn-sm" @click="parseBulkSyllabusText()" :disabled="bulkUploading || !bulkPasteText.trim()">
+                  <span x-show="bulkUploading" class="spinner"></span>
+                  <svg x-show="!bulkUploading" class="icon icon-sm"><use href="#i-sparkle"/></svg>
+                  <span>Auto-detect all subjects & topics</span>
+                </button>
+              </div>
+            </div>
+
+            <div x-show="bulkSuccessMessage" class="test-result ok" style="margin-top:10px;font-size:12.5px" x-text="bulkSuccessMessage"></div>
+          </div>
+
+          <div class="row" style="justify-content:space-between;align-items:center;margin-top:6px">
+            <p class="muted" style="margin:0">Review subjects and exam dates below. Adjust dates or colors as needed.</p>
+            <button class="btn-link" style="font-size:12px;color:var(--muted)" @click="clearWizardDraft()" x-show="bulkSuccessMessage" type="button">Clear draft</button>
+          </div>
+
+          <template x-for="(s, sIdx) in wizardSubjects" :key="sIdx">
+            <div class="wiz-subject">
+              <input type="color" x-model="s.color" aria-label="Subject colour" title="Choose color" style="cursor:pointer">
+              <input type="text" x-model="s.name" placeholder="Subject name" class="input grow" style="min-width:160px;font-weight:600">
+              <span class="chip" style="font-size:11.5px" x-show="s.topics?.length" x-text="(s.topics?.length || 0) + ' topics'"></span>
+              <input type="date" x-model="s.exam_date" :min="todayStr" class="input" style="width:auto" aria-label="Exam date" title="Exam date">
+              <button class="btn-icon danger" @click="removeWizardSubject(sIdx)" aria-label="Remove subject"><svg class="icon"><use href="#i-trash"/></svg></button>
+            </div>
+          </template>
+          <button class="dashed-add" @click="addWizardSubject()"><svg class="icon icon-sm"><use href="#i-plus"/></svg>Add another subject</button>
+        </div>
+
+        <!-- STEP 2 -->
+        <div x-show="wizardStep === 2" class="stack">
+          <p class="muted">Define topics for each subject — paste a syllabus to extract them automatically, or add them by hand.</p>
+          <div class="tabs scroll-thin">
+            <template x-for="(s, sIdx) in wizardSubjects" :key="sIdx">
+              <button class="tab" :class="wizardActiveSubjIdx === sIdx && 'on'" @click="wizardActiveSubjIdx = sIdx">
+                <span class="dot" :style="{ backgroundColor: s.color }"></span>
+                <span x-text="s.name"></span>
+                <small x-text="s.topics?.length || 0"></small>
+              </button>
+            </template>
+          </div>
+
+          <div class="inset stack" style="gap:10px">
+            <div class="label" x-text="'Paste syllabus for ' + (wizardSubjects[wizardActiveSubjIdx]?.name || '')"></div>
+            <textarea x-model="wizardSyllabusText" class="textarea" style="min-height:76px" placeholder="Unit 1: RPC and RMI · Unit 2: Consensus & Raft…"></textarea>
+            <div style="display:flex;justify-content:flex-end">
+              <button class="btn btn-primary btn-sm" @click="parseSyllabusForWizard(wizardActiveSubjIdx)" :disabled="wizardParsing">
+                <span x-show="wizardParsing" class="spinner"></span>
+                <svg x-show="!wizardParsing" class="icon icon-sm"><use href="#i-sparkle"/></svg>
+                <span x-text="wizardParsing ? 'Extracting…' : 'Auto-extract topics'"></span>
+              </button>
+            </div>
+          </div>
+
+          <div class="stack scroll-thin" style="gap:8px;max-height:260px;overflow-y:auto;padding-right:2px">
+            <div class="wiz-topic-head eyebrow" x-show="(wizardSubjects[wizardActiveSubjIdx]?.topics || []).length"><span>Unit</span><span>Topic</span><span>Diff</span><span>Hours</span><span></span></div>
+            <template x-for="(top, tIdx) in (wizardSubjects[wizardActiveSubjIdx]?.topics || [])" :key="tIdx">
+              <div class="wiz-topic">
+                <input type="text" x-model="top.unit" placeholder="Unit" class="input input-sm unit-in">
+                <input type="text" x-model="top.name" placeholder="Topic name" class="input input-sm" style="font-weight:600">
+                <input type="number" min="1" max="5" x-model.number="top.difficulty" class="input input-sm" title="Difficulty 1–5">
+                <input type="number" step="0.5" min="0.5" max="10" x-model.number="top.est_hours" class="input input-sm" title="Estimated hours">
+                <button class="btn-icon btn-icon-sm danger" @click="removeWizardTopic(wizardActiveSubjIdx, tIdx)" aria-label="Remove topic"><svg class="icon icon-sm"><use href="#i-x"/></svg></button>
+              </div>
+            </template>
+          </div>
+          <button class="dashed-add" style="height:36px" @click="addWizardTopic(wizardActiveSubjIdx)"><svg class="icon icon-sm"><use href="#i-plus"/></svg>Add topic manually</button>
+        </div>
+
+        <!-- STEP 3 -->
+        <div x-show="wizardStep === 3" class="stack">
+          <p class="muted">Set your daily capacity and the guardrails the planner must respect.</p>
+          <div class="grid grid-2">
+            <div class="inset field">
+              <label class="label" for="w-hours">Max daily study hours</label>
+              <input id="w-hours" type="number" step="0.5" min="0.5" max="16" x-model.number="wizardProfile.max_daily_hours" class="input">
+              <span class="hint">Never scheduled beyond this in a single day.</span>
+            </div>
+            <div class="inset field">
+              <label class="label" for="w-time">Peak energy period</label>
+              <select id="w-time" x-model="wizardProfile.preferred_time" class="select">
+                <option value="morning">Morning — early focus</option>
+                <option value="afternoon">Afternoon</option>
+                <option value="evening">Evening — standard</option>
+                <option value="night">Night owl</option>
+              </select>
+              <span class="hint">Hard topics (difficulty 4–5) go in high-energy slots.</span>
+            </div>
+            <div class="inset field">
+              <label class="label" for="w-break">Break duration (minutes)</label>
+              <input id="w-break" type="number" min="5" max="60" x-model.number="wizardProfile.break_minutes" class="input">
+              <span class="hint">Inserted between consecutive sessions.</span>
+            </div>
+            <div class="inset field">
+              <label class="label" for="w-burn">Burnout threshold (days)</label>
+              <input id="w-burn" type="number" min="2" max="14" x-model.number="wizardProfile.burnout_threshold_days" class="input">
+              <span class="hint">Forces a lighter day after this many heavy days.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 4 -->
+        <div x-show="wizardStep === 4" class="stack">
+          <p class="muted">Optional. Paste questions from the last 3–5 years of papers and the agent will boost frequently recurring topics.</p>
+          <textarea x-model="wizardPastPaperText" class="textarea" style="min-height:170px" placeholder="Paste questions or recurring topics from previous exam papers…"></textarea>
+          <div class="row-between">
+            <button class="btn btn-ghost" @click="wizardStep = 5">Skip this step<svg class="icon icon-sm"><use href="#i-arrow-right"/></svg></button>
+            <button class="btn btn-primary" @click="analyzePastPaperForWizard()" :disabled="!wizardPastPaperText.trim() || wizardPastPaperAnalyzing">
+              <span x-show="wizardPastPaperAnalyzing" class="spinner"></span>
+              <span x-text="wizardPastPaperAnalyzing ? 'Analysing…' : 'Analyse high-yield topics'"></span>
+            </button>
+          </div>
+        </div>
+
+        <!-- STEP 5 -->
+        <div x-show="wizardStep === 5" class="stack">
+          <div class="callout callout-info">
+            <svg class="icon icon-sm"><use href="#i-sparkle"/></svg>
+            <div>
+              <strong>Ready for autonomous scheduling</strong>
+              <p>The planner will call <code>get_free_slots</code>, <code>create_schedule</code>, <code>add_revision_sessions</code> and <code>check_conflicts</code> to build your timetable.</p>
+            </div>
+          </div>
+          <div class="grid grid-2" style="gap:12px">
+            <div class="review-tile"><div class="muted" style="font-size:12.5px">Subjects</div><div class="n tnum" x-text="wizardSubjects.length"></div></div>
+            <div class="review-tile"><div class="muted" style="font-size:12.5px">Topics</div><div class="n tnum" x-text="wizardSubjects.reduce((acc, s) => acc + (s.topics?.length || 0), 0)"></div></div>
+          </div>
+          <div>
+            <div class="eyebrow" style="margin-bottom:8px">Exam timeline</div>
+            <div class="stack" style="gap:6px">
+              <template x-for="s in wizardSubjects" :key="s.name">
+                <div class="row-between inset" style="padding:10px 14px">
+                  <div class="row"><span class="dot" :style="{ backgroundColor: s.color }"></span><strong x-text="s.name"></strong></div>
+                  <span class="muted tnum" x-text="s.exam_date + ' · ' + (s.topics?.length || 0) + ' topics'"></span>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-foot split">
+        <div>
+          <button class="btn btn-secondary" x-show="wizardStep > 1" @click="prevWizardStep()"><svg class="icon icon-sm"><use href="#i-arrow-left"/></svg>Back</button>
+        </div>
+        <div>
+          <button class="btn btn-primary" x-show="wizardStep < 5" @click="nextWizardStep()">Continue<svg class="icon icon-sm"><use href="#i-arrow-right"/></svg></button>
+          <button class="btn btn-accent" x-show="wizardStep === 5" @click="completeWizardAndGenerate()"><svg class="icon icon-sm"><use href="#i-sparkle"/></svg>Save &amp; generate plan</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== MODAL: EDIT SUBJECT ===================== -->
+  <div class="backdrop" x-show="editingSubject" x-cloak @mousedown.self="editingSubject = null">
+    <template x-if="editingSubject">
+      <div class="modal" role="dialog" aria-modal="true">
+        <div class="modal-head"><div class="modal-title">Edit subject</div></div>
+        <div class="modal-body">
+          <div class="field">
+            <label class="label" for="es-name">Name</label>
+            <div class="row"><input type="color" x-model="editingSubject.color" aria-label="Colour"><input id="es-name" type="text" x-model="editingSubject.name" class="input" style="font-weight:600"></div>
+          </div>
+          <div class="field">
+            <label class="label" for="es-date">Exam date</label>
+            <input id="es-date" type="date" x-model="editingSubject.exam_date" :min="todayStr" class="input">
+            <span class="hint">Changing the date triggers an automatic replan.</span>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn btn-ghost" @click="editingSubject = null">Cancel</button>
+          <button class="btn btn-primary" @click="saveEditSubject()">Save &amp; replan</button>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  <!-- ===================== MODAL: ADD TOPIC ===================== -->
+  <div class="backdrop" x-show="addingTopicSubjId" x-cloak @mousedown.self="addingTopicSubjId = null">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-head"><div class="modal-title">Add topic</div></div>
+      <div class="modal-body">
+        <div class="grid grid-2" style="grid-template-columns:110px 1fr;gap:12px">
+          <div class="field"><label class="label" for="at-unit">Unit</label><input id="at-unit" type="text" x-model="newTopicForm.unit" class="input"></div>
+          <div class="field"><label class="label" for="at-name">Topic name</label><input id="at-name" type="text" x-model="newTopicForm.name" placeholder="e.g. Memory management" class="input" style="font-weight:600" @keydown.enter.prevent="saveNewTopic()"></div>
+        </div>
+        <div class="grid" style="grid-template-columns:repeat(3,1fr);gap:12px">
+          <div class="field"><label class="label" for="at-diff">Difficulty</label><input id="at-diff" type="number" min="1" max="5" x-model.number="newTopicForm.difficulty" class="input"></div>
+          <div class="field"><label class="label" for="at-hrs">Hours</label><input id="at-hrs" type="number" step="0.5" min="0.5" max="10" x-model.number="newTopicForm.est_hours" class="input"></div>
+          <div class="field"><label class="label" for="at-w">Weightage</label><input id="at-w" type="number" step="0.1" min="0.1" max="3" x-model.number="newTopicForm.weightage" class="input"></div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" @click="addingTopicSubjId = null">Cancel</button>
+        <button class="btn btn-primary" @click="saveNewTopic()">Add topic</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== MODAL: EDIT TOPIC ===================== -->
+  <div class="backdrop" x-show="editingTopic" x-cloak @mousedown.self="editingTopic = null">
+    <template x-if="editingTopic">
+      <div class="modal" role="dialog" aria-modal="true">
+        <div class="modal-head"><div class="modal-title">Edit topic</div></div>
+        <div class="modal-body">
+          <div class="grid" style="grid-template-columns:110px 1fr;gap:12px">
+            <div class="field"><label class="label" for="et-unit">Unit</label><input id="et-unit" type="text" x-model="editingTopic.unit" class="input"></div>
+            <div class="field"><label class="label" for="et-name">Topic name</label><input id="et-name" type="text" x-model="editingTopic.name" class="input" style="font-weight:600"></div>
+          </div>
+          <div class="grid" style="grid-template-columns:repeat(3,1fr);gap:12px">
+            <div class="field"><label class="label" for="et-diff">Difficulty</label><input id="et-diff" type="number" min="1" max="5" x-model.number="editingTopic.difficulty" class="input"></div>
+            <div class="field"><label class="label" for="et-hrs">Hours</label><input id="et-hrs" type="number" step="0.5" min="0.5" max="10" x-model.number="editingTopic.est_hours" class="input"></div>
+            <div class="field"><label class="label" for="et-w">Weightage</label><input id="et-w" type="number" step="0.1" min="0.1" max="3" x-model.number="editingTopic.weightage" class="input"></div>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn btn-ghost" @click="editingTopic = null">Cancel</button>
+          <button class="btn btn-primary" @click="saveEditTopic()">Save</button>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  <!-- ===================== MODAL: EXPLAIN SLOT ===================== -->
+  <div class="backdrop" x-show="explainModalOpen" x-cloak @mousedown.self="explainModalOpen = false">
+    <div class="modal modal-md" role="dialog" aria-modal="true">
+      <div class="modal-head">
+        <div>
+          <div class="eyebrow" x-text="explanationData?.subject_name"></div>
+          <div class="modal-title" style="margin-top:4px" x-text="explanationData?.topic_name"></div>
+        </div>
+        <button class="btn-icon" @click="explainModalOpen = false" aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button>
+      </div>
+      <div class="modal-body">
+        <div class="inset row-between">
+          <div>
+            <div class="muted" style="font-size:12.5px">Scheduled</div>
+            <div style="font-weight:600" x-text="explanationData?.scheduled_date + ' · ' + explanationData?.time_window"></div>
+          </div>
+          <div style="text-align:right">
+            <div class="muted" style="font-size:12.5px">Priority score</div>
+            <div class="display tnum" style="font-size:32px;line-height:1;color:var(--accent)" x-text="explanationData?.priority_score"></div>
+          </div>
+        </div>
+
+        <div>
+          <div class="eyebrow" style="margin-bottom:10px">Priority factors</div>
+          <div class="factor-grid">
+            <div><span>Days to exam</span><strong x-text="explanationData?.priority_factors?.days_until_exam"></strong></div>
+            <div><span>Difficulty</span><strong x-text="explanationData?.priority_factors?.difficulty_rating + '/5'"></strong></div>
+            <div><span>Past-paper weight</span><strong x-text="explanationData?.priority_factors?.exam_weightage"></strong></div>
+            <div><span>Mastery</span><strong x-text="explanationData?.priority_factors?.current_mastery"></strong></div>
+            <div><span>Deficit factor</span><strong x-text="explanationData?.priority_factors?.mastery_deficit_multiplier"></strong></div>
+            <div><span>Energy slot</span><strong x-text="explanationData?.priority_factors?.energy_window"></strong></div>
+          </div>
+        </div>
+
+        <div class="card" style="background:var(--surface-2);border-color:var(--line);padding:14px;border-radius:10px">
+          <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:6px">Priority Formula & Math</div>
+          <code style="font-family:var(--font-mono);font-size:12.5px;display:block;color:var(--accent);margin-bottom:6px">
+            Priority = (1 / DaysToExam) × Difficulty × Weightage × (1 + (1 - Mastery))
+          </code>
+          <div class="muted" style="font-size:12.5px;line-height:1.4">
+            = (1 / <span x-text="explanationData?.priority_factors?.days_until_exam || 1"></span>) × <span x-text="explanationData?.priority_factors?.difficulty_rating || 3"></span> × <span x-text="explanationData?.priority_factors?.exam_weightage || 1"></span> × <span x-text="explanationData?.priority_factors?.mastery_deficit_multiplier || 2"></span> = <strong style="color:var(--ink)" x-text="explanationData?.priority_score"></strong>
+          </div>
+        </div>
+
+        <div>
+          <div class="eyebrow" style="margin-bottom:8px">Rationale</div>
+          <p class="quote" style="font-size:17px" x-text="explanationData?.reasoning"></p>
+        </div>
+      </div>
+      <div class="modal-foot"><button class="btn btn-secondary" @click="explainModalOpen = false">Close</button></div>
+    </div>
+  </div>
+
+  <!-- ===================== TOASTS ===================== -->
+  <div class="toasts" aria-live="polite">
+    <template x-for="t in toasts" :key="t.id">
+      <div class="toast" :class="t.type">
+        <svg class="icon"><use :href="t.type === 'success' ? '#i-check' : (t.type === 'error' ? '#i-alert' : (t.type === 'warn' ? '#i-alert' : '#i-info'))"/></svg>
+        <div class="msg" x-text="t.message"></div>
+        <button @click="dismissToast(t.id)" aria-label="Dismiss"><svg class="icon icon-sm"><use href="#i-x"/></svg></button>
+      </div>
+    </template>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

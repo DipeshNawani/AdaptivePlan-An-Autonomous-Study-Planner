@@ -1,0 +1,29 @@
+# Environment & Secrets (Never commit credentials)
+.env
+*.env
+!.env.example
+
+# SQLite Databases & temporary storage
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/*.db.corrupted
+data/temp_*
+
+# Python & Environment caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+venv/
+.venv/
+env/
+
+# Logs & Temporary files
+*.log
+.DS_Store
+Thumbs.db
+*.tmp
+*.zip
